@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Daily Motivation - Free Quotes App</title>
+<title>Daily Motivation - Enhanced Quotes App</title>
 <style>
   /* Reset & base */
   * {
@@ -16,50 +16,58 @@
     color: #fff;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    height: 600px;
     max-width: 350px;
+    height: 600px;
     margin: 10px auto;
     padding: 20px;
     border-radius: 15px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.25);
   }
   header {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 700;
     margin-bottom: 10px;
     text-align:center;
   }
   main {
     flex: 1 0 auto;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    text-align: center;
-    padding: 20px;
-    font-size: 1.2rem;
+    justify-content: flex-start;
+    padding: 10px 15px 0 15px;
+    font-size: 1.15rem;
     line-height: 1.4;
     background: rgba(255 255 255 / 0.15);
     border-radius: 15px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+  }
+  #quote {
+    min-height: 6.5em;
+    margin-bottom: 16px;
+    text-align: center;
+    font-weight: 600;
   }
   button {
     background-color: #fff;
     border: none;
     color: #2575fc;
     font-weight: 700;
-    font-size: 1.25rem;
-    padding: 12px 20px;
+    font-size: 1.1rem;
+    padding: 12px 18px;
     border-radius: 30px;
-    margin-top: 20px;
     cursor: pointer;
+    margin: 6px 0;
     box-shadow: 0 4px 10px rgba(0,123,255,0.5);
     transition: background-color 0.2s ease, color 0.2s ease;
   }
-  button:hover {
+  button:hover:not(:disabled) {
     background-color: #2575fc;
     color: #fff;
+  }
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   footer {
     margin-top: 15px;
@@ -79,6 +87,33 @@
     font-size: 0.9rem;
     user-select: none;
   }
+
+  form {
+    margin-top: 12px;
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 60px;
+    border-radius: 8px;
+    border: none;
+    padding: 8px;
+    font-size: 1rem;
+    resize: vertical;
+    font-family: inherit;
+  }
+  /* Scrollbar styling */
+  main::-webkit-scrollbar {
+    width: 8px;
+  }
+  main::-webkit-scrollbar-thumb {
+    background-color: rgba(37,117,252,0.6);
+    border-radius: 8px;
+  }
   /* Mobile friendly */
   @media (max-width: 400px) {
     body {
@@ -94,8 +129,16 @@
 <body>
   <header>Daily Motivation</header>
   <main>
-    <div id="quote">Press the button for your motivational quote!</div>
+    <div id="quote" aria-live="polite" aria-atomic="true">Press "New Quote" for your motivational quote!</div>
     <button id="newQuoteBtn" aria-label="Get new motivational quote">New Quote</button>
+    <button id="shareQuoteBtn" aria-label="Share current motivational quote">Share Quote</button>
+    <button id="notifyBtn" aria-label="Enable daily notifications">Enable Daily Notifications</button>
+
+    <form id="submitQuoteForm" aria-label="Submit your own motivational quote">
+      <label for="newQuoteInput">Add Your Own Quote:</label>
+      <textarea id="newQuoteInput" placeholder="Type your motivational quote here..." aria-required="true"></textarea>
+      <button type="submit">Submit Quote</button>
+    </form>
   </main>
   <footer>
     <div class="ad-banner" aria-label="Advertisement placeholder">
@@ -104,7 +147,7 @@
   </footer>
 
 <script>
-  const quotes = [
+  const defaultQuotes = [
     "Believe you can and you're halfway there. – Theodore Roosevelt",
     "Your limitation—it’s only your imagination.",
     "Push yourself, because no one else is going to do it for you.",
@@ -117,17 +160,164 @@
     "Do something today that your future self will thank you for."
   ];
 
-  const quoteElem = document.getElementById('quote');
-  const btn = document.getElementById('newQuoteBtn');
+  // Storage key for user quotes
+  const USER_QUOTES_KEY = 'userSubmittedQuotes';
 
-  function getRandomQuote() {
-    const idx = Math.floor(Math.random() * quotes.length);
-    return quotes[idx];
+  // Get elements
+  const quoteElem = document.getElementById('quote');
+  const newQuoteBtn = document.getElementById('newQuoteBtn');
+  const shareQuoteBtn = document.getElementById('shareQuoteBtn');
+  const notifyBtn = document.getElementById('notifyBtn');
+  const submitQuoteForm = document.getElementById('submitQuoteForm');
+  const newQuoteInput = document.getElementById('newQuoteInput');
+
+  // Load user submitted quotes from localStorage or empty array
+  function loadUserQuotes() {
+    try {
+      const stored = localStorage.getItem(USER_QUOTES_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
   }
 
-  btn.addEventListener('click', () => {
-    quoteElem.textContent = getRandomQuote();
+  // Save user submitted quotes to localStorage
+  function saveUserQuotes(quotes) {
+    localStorage.setItem(USER_QUOTES_KEY, JSON.stringify(quotes));
+  }
+
+  // Combine default and user submitted quotes
+  function getAllQuotes() {
+    return [...defaultQuotes, ...loadUserQuotes()];
+  }
+
+  // Current displayed quote
+  let currentQuote = '';
+
+  // Pick a random quote from all quotes
+  function getRandomQuote() {
+    const allQuotes = getAllQuotes();
+    if(allQuotes.length === 0) return 'No quotes available.';
+    const idx = Math.floor(Math.random() * allQuotes.length);
+    return allQuotes[idx];
+  }
+
+  // Display a new random quote
+  function showNewQuote() {
+    currentQuote = getRandomQuote();
+    quoteElem.textContent = currentQuote;
+  }
+
+  newQuoteBtn.addEventListener('click', showNewQuote);
+
+  // Share the current quote using Web Share API or fallback
+  shareQuoteBtn.addEventListener('click', () => {
+    if (!currentQuote) {
+      alert('Please generate a quote first.');
+      return;
+    }
+    if (navigator.share) {
+      navigator.share({
+        title: 'Daily Motivation',
+        text: currentQuote,
+        url: window.location.href
+      }).catch(err => {
+        // User cancelled or error
+      });
+    } else {
+      // Fallback: copy text to clipboard
+      copyTextToClipboard(currentQuote)
+        .then(() => alert('Quote copied to clipboard!'))
+        .catch(() => alert('Failed to copy quote.'));
+    }
   });
+
+  // Copy text helper using Clipboard API fallback
+  function copyTextToClipboard(text) {
+    if (navigator.clipboard) {
+      return navigator.clipboard.writeText(text);
+    } else {
+      return new Promise((resolve, reject) => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed'; // prevent scroll jump
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+          const successful = document.execCommand('copy');
+          document.body.removeChild(textarea);
+          if (successful) resolve();
+          else reject();
+        } catch (e) {
+          document.body.removeChild(textarea);
+          reject();
+        }
+      });
+    }
+  }
+
+  // Notifications
+
+  let notificationIntervalId = null;
+
+  notifyBtn.addEventListener('click', () => {
+    if (!("Notification" in window)) {
+      alert('This browser does not support notifications.');
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      startDailyNotifications();
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") startDailyNotifications();
+        else alert('Notification permission denied.');
+      });
+    } else {
+      alert('Notifications have been blocked. Please enable in your browser settings.');
+    }
+  });
+
+  function startDailyNotifications() {
+    notifyBtn.disabled = true;
+    notifyBtn.textContent = 'Notifications Enabled';
+    sendNotification();
+
+    // For demo: send notification every 12 hours
+    // In real app, Service Worker and Push API required for exact daily notifications
+    notificationIntervalId = setInterval(sendNotification, 12 * 60 * 60 * 1000);
+  }
+
+  function sendNotification() {
+    const notification = new Notification('Daily Motivation', {
+      body: getRandomQuote(),
+      icon: 'https://cdn-icons-png.flaticon.com/512/2583/2583186.png' // motivational icon
+    });
+    // Optionally handle notification click if needed
+  }
+
+  // Submit user quote
+  submitQuoteForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = newQuoteInput.value.trim();
+    if (!text) {
+      alert('Please enter a quote before submitting.');
+      return;
+    }
+    const userQuotes = loadUserQuotes();
+    if(userQuotes.includes(text)) {
+      alert('This quote has already been submitted.');
+      newQuoteInput.value = '';
+      return;
+    }
+    userQuotes.push(text);
+    saveUserQuotes(userQuotes);
+    newQuoteInput.value = '';
+    alert('Thank you for your submission! It will appear in future quotes.');
+  });
+
+  // Show initial quote on load
+  showNewQuote();
 </script>
 </body>
 </html>
